@@ -56,3 +56,67 @@ Deno.test("map parser", () => {
     result: { type: "success", value: "ab" },
   })
 })
+
+Deno.test("zero or more parser", () => {
+  const aParser = P.char("a")
+  const zeroOrMoreAParser = P.zeroOrMore(aParser)
+  assertEquals(P.parseString(zeroOrMoreAParser, "abc"), {
+    parserState: { input: "abc".split(""), index: 1 },
+    result: { type: "success", value: ["a"] },
+  })
+  assertEquals(P.parseString(zeroOrMoreAParser, "aaaabc"), {
+    parserState: { input: "aaaabc".split(""), index: 4 },
+    result: { type: "success", value: ["a", "a", "a", "a"] },
+  })
+  assertEquals(P.parseString(zeroOrMoreAParser, "bc"), {
+    parserState: { input: "bc".split(""), index: 0 },
+    result: { type: "success", value: [] },
+  })
+})
+
+Deno.test("one or more parser", () => {
+  const aParser = P.char("a")
+  const oneOrMoreAParser = P.oneOrMore(aParser)
+  assertEquals(P.parseString(oneOrMoreAParser, "abc"), {
+    parserState: { input: "abc".split(""), index: 1 },
+    result: { type: "success", value: ["a"] },
+  })
+  assertEquals(P.parseString(oneOrMoreAParser, "aaaabc"), {
+    parserState: { input: "aaaabc".split(""), index: 4 },
+    result: { type: "success", value: ["a", "a", "a", "a"] },
+  })
+  assertEquals(P.parseString(oneOrMoreAParser, "bc"), {
+    parserState: { input: "bc".split(""), index: 0 },
+    result: { type: "error", error: "expected at least one of something" },
+  })
+})
+
+Deno.test("optional parser", () => {
+  const aParser = P.char("a")
+  const optionalAParser = P.optional(aParser)
+  assertEquals(P.parseString(optionalAParser, "abc"), {
+    parserState: { input: "abc".split(""), index: 1 },
+    result: { type: "success", value: "a" },
+  })
+  assertEquals(P.parseString(optionalAParser, "bc"), {
+    parserState: { input: "bc".split(""), index: 0 },
+    result: { type: "success", value: null },
+  })
+})
+
+Deno.test("sequence parser", () => {
+  const aParser = P.char("a")
+  const bParser = P.char("b")
+  assertEquals(P.parseString(P.sequence(aParser, bParser), "abc"), {
+    parserState: { input: "abc".split(""), index: 2 },
+    result: { type: "success", value: ["a", "b"] },
+  })
+  assertEquals(P.parseString(P.sequence(aParser, bParser), "bc"), {
+    parserState: { input: "bc".split(""), index: 0 },
+    result: { type: "error", error: "expected the character a" },
+  })
+  assertEquals(P.parseString(P.sequence(aParser, bParser), "ac"), {
+    parserState: { input: "ac".split(""), index: 1 },
+    result: { type: "error", error: "expected the character b" },
+  })
+})

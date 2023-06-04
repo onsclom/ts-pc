@@ -91,3 +91,60 @@ export function map<I, O1, O2>(
     return failure(result.parserState, result.result.error)
   }
 }
+
+type SuccessOnlyParser<I, O> = (
+  parserInput: ParserInput<I>
+) => ParserSuccess<I, O>
+
+export function zeroOrMore<I, O>(
+  parser: Parser<I, O>
+): SuccessOnlyParser<I, O[]> {
+  return (input: ParserInput<I>): ParserSuccess<I, O[]> => {
+    const results: O[] = []
+    let state = input
+    while (true) {
+      const result = parser({ input: state.input, index: state.index })
+      if (result.result.type === "error") break
+      results.push(result.result.value)
+      state = result.parserState
+    }
+    return success(state, results)
+  }
+}
+
+export function oneOrMore<I, O>(parser: Parser<I, O>): Parser<I, O[]> {
+  return (input: ParserInput<I>): ParserOutput<I, O[]> => {
+    const result = zeroOrMore(parser)(input)
+    if (result.result.value.length === 0)
+      return failure(input, "expected at least one of something")
+    return result
+  }
+}
+
+export function optional<I, O>(
+  parser: Parser<I, O>
+): SuccessOnlyParser<I, O | null> {
+  return (input: ParserInput<I>): ParserSuccess<I, O | null> => {
+    const result = parser(input)
+    if (result.result.type === "error") return success(input, null)
+    return success(result.parserState, result.result.value)
+  }
+}
+
+export function sequence<I, O1, O2>(
+  parser1: Parser<I, O1>,
+  parser2: Parser<I, O2>
+): Parser<I, [O1, O2]> {
+  return (input: ParserInput<I>): ParserOutput<I, [O1, O2]> => {
+    const result1 = parser1(input)
+    if (result1.result.type === "error")
+      return failure(result1.parserState, result1.result.error)
+    const result2 = parser2(result1.parserState)
+    if (result2.result.type === "error")
+      return failure(result2.parserState, result2.result.error)
+    return success(result2.parserState, [
+      result1.result.value,
+      result2.result.value,
+    ])
+  }
+}
