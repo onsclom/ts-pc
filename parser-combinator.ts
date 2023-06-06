@@ -68,15 +68,28 @@ export function parseString<O>(
 }
 
 export function or<I, O1, O2>(
-  parser1: Parser<I, O1>,
-  parser2: Parser<I, O2>
-): Parser<I, O1 | O2> {
+  p1: Parser<I, O1>,
+  p2: Parser<I, O2>
+): Parser<I, O1 | O2>
+export function or<I, O1, O2, O3>(
+  p1: Parser<I, O1>,
+  p2: Parser<I, O2>,
+  p3: Parser<I, O3>
+): Parser<I, O1 | O2 | O3>
+export function or<I, O1, O2, O3, O4>(
+  p1: Parser<I, O1>,
+  p2: Parser<I, O2>,
+  p3: Parser<I, O3>,
+  p4: Parser<I, O4>
+): Parser<I, O1 | O2 | O3 | O4>
+// deno-lint-ignore no-explicit-any
+export function or<I>(...parsers: Parser<I, any>[]): Parser<I, any> {
   return (input: ParserInput<I>) => {
-    const result1 = parser1(input)
-    if (result1.result.type === "success") return result1
-    const result2 = parser2(input)
-    if (result2.result.type === "success") return result2
-    return error(input, `${result1.result.error} or ${result2.result.error}`)
+    for (const parser of parsers) {
+      const output = parser(input)
+      if (output.result.type === "success") return output
+    }
+    return error(input, "failed or parser")
   }
 }
 

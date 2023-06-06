@@ -43,7 +43,7 @@ Deno.test("or parser", () => {
     parserState: { input: "abc".split(""), index: 2 },
     result: {
       type: "error",
-      error: "expected the character a or expected the character b",
+      error: "failed or parser",
     },
   })
 })
