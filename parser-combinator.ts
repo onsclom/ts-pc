@@ -11,7 +11,7 @@ export type ParserSuccess<I, O> = {
   }
 }
 
-export type ParserFailure<I> = {
+export type ParserError<I> = {
   parserState: ParserInput<I>
   result: {
     type: "error"
@@ -19,9 +19,9 @@ export type ParserFailure<I> = {
   }
 }
 
-export type ParserOutput<I, O> = ParserSuccess<I, O> | ParserFailure<I>
+export type ParserOutput<I, O> = ParserSuccess<I, O> | ParserError<I>
 
-export type ParserResult<I, O> = ParserSuccess<I, O> | ParserFailure<I>
+export type ParserResult<I, O> = ParserSuccess<I, O> | ParserError<I>
 
 export type Parser<I, O> = (input: ParserInput<I>) => ParserResult<I, O>
 
@@ -35,10 +35,10 @@ export function success<I, O>(
   }
 }
 
-export function failure<I>(
+export function error<I>(
   parserState: ParserInput<I>,
   error: string
-): ParserFailure<I> {
+): ParserError<I> {
   return {
     parserState,
     result: { type: "error", error },
@@ -49,7 +49,7 @@ export function char(c: string): Parser<string, string> {
   return (input: ParserInput<string>) => {
     const { index, input: str } = input
     if (str.at(index) === c) return success({ input: str, index: index + 1 }, c)
-    return failure(input, `expected the character ${c}`)
+    return error(input, `expected the character ${c}`)
   }
 }
 
@@ -76,7 +76,7 @@ export function or<I, O1, O2>(
     if (result1.result.type === "success") return result1
     const result2 = parser2(input)
     if (result2.result.type === "success") return result2
-    return failure(input, `${result1.result.error} or ${result2.result.error}`)
+    return error(input, `${result1.result.error} or ${result2.result.error}`)
   }
 }
 
@@ -88,7 +88,7 @@ export function map<I, O1, O2>(
     const result = parser(input)
     if (result.result.type === "success")
       return success(result.parserState, fn(result.result.value))
-    return failure(result.parserState, result.result.error)
+    return error(result.parserState, result.result.error)
   }
 }
 
@@ -116,7 +116,7 @@ export function oneOrMore<I, O>(parser: Parser<I, O>): Parser<I, O[]> {
   return (input: ParserInput<I>): ParserOutput<I, O[]> => {
     const result = zeroOrMore(parser)(input)
     if (result.result.value.length === 0)
-      return failure(input, "expected at least one of something")
+      return error(input, "expected at least one of something")
     return result
   }
 }
@@ -138,13 +138,63 @@ export function sequence<I, O1, O2>(
   return (input: ParserInput<I>): ParserOutput<I, [O1, O2]> => {
     const result1 = parser1(input)
     if (result1.result.type === "error")
-      return failure(result1.parserState, result1.result.error)
+      return error(result1.parserState, result1.result.error)
     const result2 = parser2(result1.parserState)
     if (result2.result.type === "error")
-      return failure(result2.parserState, result2.result.error)
+      return error(result2.parserState, result2.result.error)
     return success(result2.parserState, [
       result1.result.value,
       result2.result.value,
     ])
   }
+}
+
+export const digit = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+  .map((digit) => char(digit.toString()))
+  .reduce((prev, curr) => or(prev, curr))
+
+export function notOneOfChar(chars: string[]): Parser<string, string> {
+  return (input: ParserInput<string>): ParserOutput<string, string> => {
+    const { index, input: str } = input
+    const c = str.at(index)
+    if (!c) return error(input, "expected a character")
+    if (chars.includes(c))
+      return error(input, `expected not one of ${chars.join(", ")}`)
+    return success({ input: str, index: index + 1 }, c)
+  }
+}
+
+export const whitespace = [" ", "\n", "\t", "\r"].map((c) => char(c)).reduce(or)
+
+export function lazy<I, O>(parser: () => Parser<I, O>): Parser<I, O> {
+  return (input: ParserInput<I>): ParserOutput<I, O> => parser()(input)
+}
+
+export function seperatedBy<I, O, O2>(
+  parser: Parser<I, O>,
+  seperator: Parser<I, O2>
+) {
+  return (input: ParserInput<I>): ParserOutput<I, O[]> => {
+    const results: O[] = []
+    let state = input
+    while (true) {
+      const result = parser({ input: state.input, index: state.index })
+      if (result.result.type === "error") break
+      results.push(result.result.value)
+      state = result.parserState
+      const seperatorResult = seperator(result.parserState)
+      if (seperatorResult.result.type === "error") break
+      state = seperatorResult.parserState
+    }
+    return success(state, results)
+  }
+}
+
+export function skipWhitespace<O>(
+  parser: Parser<string, O>
+): Parser<string, O> {
+  return map(
+    sequence(zeroOrMore(whitespace), sequence(parser, zeroOrMore(whitespace))),
+    ([, [value]]) => value
+  )
 }
